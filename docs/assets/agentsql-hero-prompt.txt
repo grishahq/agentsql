@@ -1,0 +1,10 @@
+AgentSQL launch hero
+
+Generation method: built-in image_gen tool, edit mode.
+Input: docs/assets/launch-hero.png
+Output: docs/assets/agentsql-hero.png
+Background: opaque cream.
+Inspection: the exact AgentSQL headline and both requested subtitle lines were checked visually. The original illustration, color palette, and composition are retained.
+
+Prompt:
+Use case: text-localization. Asset type: AgentSQL launch hero for README, GitHub, X, and LinkedIn. Input image 1 is the edit target. Replace ONLY the typographic block at the top, preserving the cream paper background, polished editorial papercraft illustration, charcoal connector lines, emerald accepted document, amber rejected document, shadows, and wide landscape composition. Make the main headline exactly 'AgentSQL' with A, S, Q, L capitalized, in the same large bold near-black sans-serif. Directly below it place the exact subtitle 'Persistent state for AI agents.' in clean smaller near-black sans-serif. A third line in smaller type reads exactly 'Files, JSON, and tool history in SQLite.' Keep generous separation between typography and illustration. Maintain the existing illustration of two parallel document proposal paths flowing to a validation node, with one green accepted output and one amber blocked output. No other text whatsoever. Remove both original text lines fully. No hyphenated brand name, no em dashes, no vendor logos, no watermark. Keep an opaque warm cream background, same final image aspect ratio and full image composition.
