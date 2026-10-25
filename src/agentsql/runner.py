@@ -40,6 +40,28 @@ def _kill_group(process: subprocess.Popen) -> None:
         pass
 
 
+def _stop_process(process: subprocess.Popen) -> None:
+    # Signal once, then reap. On
+    # Darwin, signaling an already-killed group containing only zombies can
+    # return EPERM, so duplicate cleanup signals are not harmless.
+    try:
+        _kill_group(process)
+    except BaseException:
+        # A genuine group permission failure must stay visible and cannot make
+        # cleanup wait forever. Try the owned leader separately, then wait only
+        # briefly if it too cannot be stopped. Descendants may remain alive.
+        try:
+            process.kill()
+        except OSError:
+            pass
+        try:
+            process.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    process.wait()
+
+
 def _run_process(command: list[str], directory: Path, timeout: float,
                  environment: dict[str, str] | None) -> dict:
     started = time.monotonic()
@@ -65,7 +87,6 @@ def _run_process(command: list[str], directory: Path, timeout: float,
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     timed_out = True
-                    _kill_group(process)
                     break
                 for key, _ in selector.select(min(remaining, 0.05)):
                     chunk = os.read(key.fd, 65536)
@@ -75,15 +96,20 @@ def _run_process(command: list[str], directory: Path, timeout: float,
                     name = key.data
                     totals[name] += len(chunk)
                     streams[name].extend(chunk[:max(0, MAX_OUTPUT_BYTES - len(streams[name]))])
-            # Background children are not allowed to keep changing the exported
-            # tree after the foreground command exits. This manages lifecycle,
-            # not containment: a detached process can escape its process group.
-            _kill_group(process)
-            process.wait()
-        except BaseException:
-            _kill_group(process)
-            process.wait()
+        except BaseException as error:
+            try:
+                _stop_process(process)
+            except BaseException as cleanup_error:
+                # Keep the execution/setup error primary while exposing the
+                # cleanup failure as its cause.
+                raise error from cleanup_error
             raise
+        else:
+            # Background children are not allowed to keep changing the exported
+            # tree after the foreground command exits. Timeouts use this same
+            # single signal. A detached process can escape its process group;
+            # this manages lifecycle, not containment.
+            _stop_process(process)
         finally:
             if process.stdout is not None:
                 process.stdout.close()
