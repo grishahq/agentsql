@@ -16,6 +16,8 @@ The Python import, CLI command, and distribution name are all `agentsql`.
   materialized tree with bounded output, timeouts, and atomic checked import.
 - Added CLI file/state/tool commands, MCP serving, and command execution.
 - Added transactional schema 1/2 → 3 migration, preserving old sealed IDs.
+- Corrected macOS timeout cleanup to signal a command's process group once,
+  reap its leader, and preserve execution failures during resource cleanup.
 
 This covers the common AgentFS-style files/state/tool-history workflow. It is
 not AgentFS format/API compatibility or full POSIX parity. Native mounting,
