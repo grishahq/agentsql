@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import base64
+import os
 from pathlib import Path
 import selectors
+import signal
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from agentsql import ConflictError, Workspace, WorkspaceBusyError
 from agentsql.audit import ToolLog
-from agentsql.runner import MAX_OUTPUT_BYTES, _run_process, run_command
+from agentsql.runner import MAX_OUTPUT_BYTES, _run_process, _stop_process, run_command
 
 
 class CommandRunnerTests(unittest.TestCase):
@@ -165,6 +167,121 @@ class CommandRunnerTests(unittest.TestCase):
         self.assertTrue(children[0].stdout.closed)
         self.assertTrue(children[0].stderr.closed)
         self.assertIsNone(selector.get_map())
+
+    def test_timeout_signals_group_once_then_reaps_and_closes_resources(self):
+        selector = selectors.DefaultSelector()
+        spawn = subprocess.Popen
+        killpg = os.killpg
+        children = []
+
+        def track_spawn(*args, **kwargs):
+            child = spawn(*args, **kwargs)
+            children.append(child)
+            return child
+
+        def kill_once(group, sig):
+            if terminate.call_count > 1:
+                # Darwin returns EPERM when a prior SIGKILL leaves only
+                # unreaped zombies in the group. Do not send that second signal.
+                raise PermissionError(1, "Operation not permitted")
+            return killpg(group, sig)
+
+        with patch("agentsql.runner.selectors.DefaultSelector", return_value=selector), \
+                patch("agentsql.runner.subprocess.Popen", side_effect=track_spawn), \
+                patch("agentsql.runner.os.killpg", side_effect=kill_once) as terminate:
+            result = _run_process([sys.executable, "-c", "import time; time.sleep(60)"],
+                                  self.root, 0.05, None)
+        self.assertTrue(result["timed_out"], result)
+        self.assertEqual(result["returncode"], -signal.SIGKILL)
+        terminate.assert_called_once_with(children[0].pid, signal.SIGKILL)
+        self.assertTrue(children[0].stdout.closed)
+        self.assertTrue(children[0].stderr.closed)
+        self.assertIsNone(selector.get_map())
+
+    def test_signal_failure_is_not_retried_and_still_reaps_child(self):
+        spawn = subprocess.Popen
+        killpg = os.killpg
+        children = []
+
+        def track_spawn(*args, **kwargs):
+            child = spawn(*args, **kwargs)
+            children.append(child)
+            return child
+
+        def fail_after_killing(group, sig):
+            # Inject a signaling error while allowing this real child to exit,
+            # so the test can verify reaping without leaking a live process.
+            killpg(group, sig)
+            raise PermissionError(1, "injected signal failure")
+
+        with patch("agentsql.runner.subprocess.Popen", side_effect=track_spawn), \
+                patch("agentsql.runner.os.killpg", side_effect=fail_after_killing) as terminate, \
+                self.assertRaisesRegex(PermissionError, "injected signal failure"):
+            _run_process([sys.executable, "-c", "import time; time.sleep(60)"],
+                         self.root, 0.05, None)
+        self.assertEqual(terminate.call_count, 1)
+        self.assertIsNotNone(children[0].returncode)
+        self.assertTrue(children[0].stdout.closed)
+        self.assertTrue(children[0].stderr.closed)
+
+    def test_setup_error_remains_primary_if_cleanup_signal_fails(self):
+        spawn = subprocess.Popen
+        killpg = os.killpg
+        children = []
+
+        def track_spawn(*args, **kwargs):
+            child = spawn(*args, **kwargs)
+            children.append(child)
+            return child
+
+        def fail_after_killing(group, sig):
+            killpg(group, sig)
+            raise PermissionError(1, "injected cleanup failure")
+
+        with patch("agentsql.runner.subprocess.Popen", side_effect=track_spawn), \
+                patch("agentsql.runner.os.set_blocking", side_effect=OSError("original setup failure")), \
+                patch("agentsql.runner.os.killpg", side_effect=fail_after_killing) as terminate, \
+                self.assertRaisesRegex(OSError, "original setup failure") as caught:
+            _run_process([sys.executable, "-c", "import time; time.sleep(60)"],
+                         self.root, 10, None)
+        self.assertIsInstance(caught.exception.__cause__, PermissionError)
+        self.assertEqual(terminate.call_count, 1)
+        self.assertIsNotNone(children[0].returncode)
+        self.assertTrue(children[0].stdout.closed)
+        self.assertTrue(children[0].stderr.closed)
+
+    def test_denied_group_signal_stops_owned_leader_without_hiding_error(self):
+        spawn = subprocess.Popen
+        children = []
+
+        def track_spawn(*args, **kwargs):
+            child = spawn(*args, **kwargs)
+            children.append(child)
+            return child
+
+        with patch("agentsql.runner.subprocess.Popen", side_effect=track_spawn), \
+                patch("agentsql.runner.os.killpg", side_effect=PermissionError(1, "group denied")) as terminate, \
+                self.assertRaisesRegex(PermissionError, "group denied"):
+            _run_process([sys.executable, "-c", "import time; time.sleep(60)"],
+                         self.root, 0.05, None)
+        self.assertEqual(terminate.call_count, 1)
+        self.assertIsNotNone(children[0].returncode)
+        self.assertTrue(children[0].stdout.closed)
+        self.assertTrue(children[0].stderr.closed)
+
+    def test_denied_group_and_leader_signals_do_not_wait_without_a_bound(self):
+        child = Mock(spec=subprocess.Popen)
+        child.pid = 12345
+        child.kill.side_effect = PermissionError(1, "leader denied")
+        child.wait.side_effect = subprocess.TimeoutExpired("inaccessible command", 1)
+        with patch("agentsql.runner.os.killpg", side_effect=PermissionError(1, "group denied")) as terminate, \
+                self.assertRaisesRegex(PermissionError, "group denied"):
+            _stop_process(child)
+        terminate.assert_called_once_with(child.pid, signal.SIGKILL)
+        child.kill.assert_called_once_with()
+        child.wait.assert_called_once()
+        self.assertGreater(child.wait.call_args.kwargs["timeout"], 0)
+        self.assertLessEqual(child.wait.call_args.kwargs["timeout"], 1)
 
     def test_symlink_output_rejects_entire_import(self):
         result = self.run_python("from pathlib import Path; "
