@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentsql"
+version = "0.3.0a1"
+description = "Persistent state for AI agents: files, JSON, and tool history in SQLite"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["agents", "workspaces", "sqlite", "versioning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Version Control",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/grishahq/agentsql"
+Documentation = "https://github.com/grishahq/agentsql/tree/main/docs"
+Repository = "https://github.com/grishahq/agentsql"
+Issues = "https://github.com/grishahq/agentsql/issues"
+Changelog = "https://github.com/grishahq/agentsql/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2,<2",
+    "coverage[toml]>=7.10,<8",
+    "mypy>=1.15,<2",
+    "ruff>=0.11,<1",
+    "setuptools>=77.0.3",
+    "twine>=6,<7",
+    "wheel>=0.45,<1",
+]
+
+[project.scripts]
+agentsql = "agentsql.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agentsql = ["py.typed"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/agentsql"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.coverage.run]
+branch = true
+# Run development checks from the checkout root after an editable dev install.
+# An absolute source directory remains valid in worker subprocesses with a
+# different working directory and avoids package-import diagnostics at spawn.
+source_dirs = ["${PWD}/src/agentsql"]
+parallel = true
+concurrency = ["multiprocessing"]
+patch = ["subprocess"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
