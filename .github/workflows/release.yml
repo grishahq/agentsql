@@ -1,0 +1,95 @@
+name: Publish alpha to PyPI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-release
+  cancel-in-progress: false
+
+jobs:
+  correctness:
+    if: github.ref == 'refs/heads/main'
+    name: Verify ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install SDK and development checks
+        run: python -m pip install -e '.[dev]'
+      - name: Static checks
+        run: |
+          python -m ruff check .
+          python -m mypy
+      - name: Correctness and process checks
+        run: python -W error::ResourceWarning -m unittest discover -s tests -v
+
+  build:
+    needs: correctness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.14'
+          cache: pip
+      - name: Install release tooling
+        run: python -m pip install -e '.[dev]'
+      - name: Require the reviewed alpha version
+        run: |
+          python -c 'import importlib.metadata; assert importlib.metadata.version("agentsql") == "0.3.0a1"'
+      - name: Verify distributions offline in a clean environment
+        run: python tools/verify_release.py --dist-dir release-dist
+      - name: Retain verified distributions
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: pypi-distributions-0.3.0a1
+          path: |
+            release-dist/agentsql-0.3.0a1-py3-none-any.whl
+            release-dist/agentsql-0.3.0a1.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain release verification evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-evidence-0.3.0a1
+          path: |
+            release-dist/release-verification.json
+            release-dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/agentsql/0.3.0a1/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download only the verified distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: pypi-distributions-0.3.0a1
+          path: dist
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
