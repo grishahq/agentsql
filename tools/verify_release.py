@@ -128,14 +128,18 @@ def verify(directory: Path, env: dict[str, str], checks: list[dict]) -> dict:
     required = ["README.md", "LICENSE", "pyproject.toml", "src/agentsql/py.typed",
                 "docs/integration.md", "docs/platform.md", "tools/verify_release.py", "examples/demo.py",
                 "examples/project_integration.py", "examples/scenarios.py", "examples/platform_demo.py",
+                "examples/on_call_race.py", "tests/test_on_call_race.py",
+                "experiments/on-call-race/README.md", "docs/development.md",
                 "tests/test_workspace.py", "tests/test_platform_demo.py",
                 "docs/assets/agentsql-hero.png", "docs/assets/agentsql-hero-prompt.txt",
+                "docs/assets/on-call-race.png",
                 ".github/workflows/release.yml"]
     for name in required:
         ensure((source_root / name).is_file(), f"Source distribution is missing {name}")
     ensure((source_root / "docs/assets/agentsql-hero.png").read_bytes().startswith(
         b"\x89PNG\r\n\x1a\n"), "Source archive launch image is not a PNG")
-    for folder, suffix in [("tests", ".py"), ("examples", ".py"), ("docs", ".md")]:
+    for folder, suffix in [("tests", ".py"), ("examples", ".py"), ("docs", ".md"),
+                           ("experiments", ".md"), ("experiments", ".json")]:
         expected = {path.relative_to(ROOT) for path in (ROOT / folder).rglob(f"*{suffix}")}
         actual = {path.relative_to(source_root) for path in (source_root / folder).rglob(f"*{suffix}")}
         ensure(expected == actual, f"Source distribution has an incomplete {folder} directory")
@@ -201,6 +205,15 @@ def verify(directory: Path, env: dict[str, str], checks: list[dict]) -> dict:
     ensure(platform_demo["passed"] == len(platform_demo["outcomes"]) >= 7,
            "Platform demonstration did not verify all expected outcome groups")
     checks[-1]["outcome_groups"] = platform_demo["passed"]
+    output = run("Source archive on-call race lab", [str(python), str(source_root /
+        "examples" / "on_call_race.py"), "--rounds", "2"],
+        consumer, consumer_env, checks)
+    on_call = json.loads(output)
+    ensure(on_call["status"] == "PASS" and on_call["rounds_per_case"] == 2
+           and len(on_call["summary"]) == 4,
+           "On-call race lab did not verify all four controlled cases")
+    checks[-1]["cases"] = len(on_call["summary"])
+    checks[-1]["rounds_per_case"] = on_call["rounds_per_case"]
     run("Source archive correctness suite against installed wheel", [str(python), "-m", "unittest",
         "discover", "-s", str(source_root / "tests"), "-v"], consumer, consumer_env, checks,
         timeout=300)

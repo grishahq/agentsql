@@ -57,6 +57,29 @@ The [platform guide](docs/platform.md) shows the expanded `fs`, `kv`, and `tools
 interfaces, MCP connection, command runner, and an explicit capability comparison
 with AgentFS. Run `python examples/platform_demo.py` after installation.
 
+## On-call race experiment
+
+Two workers can update different keys and still break a shared rule. The
+[on-call race lab](experiments/on-call-race/README.md) models two responders who
+each try to leave while at least one must remain on call. It compares logged
+snapshot reads with tracked branch reads, fresh recomputation, and independent
+teams using the same local SDK.
+
+```sh
+python examples/on_call_race.py --rounds 10 --output on-call-results.json
+```
+
+The workers are real local processes with simulated decisions. The lab checks
+the state after every accepted worker proposal and records conflict evidence. Its
+snapshot baseline deliberately bypasses branch read tracking; tool history
+alone does not register those dependencies. This is a consistency experiment,
+not a model-quality evaluation or a throughput benchmark. See the lab guide
+for the comparison, recorded results, and limits.
+
+The [recorded run](experiments/on-call-race/results-2026-10-30.json) contains
+100 trials per case with balanced acceptance orders. All 100 snapshot-read
+trials lost coverage; the three tracked cases had zero coverage violations.
+
 ## SDK quickstart
 
 ```python
@@ -263,6 +286,8 @@ deploying it; passing tests do not establish every production environment.
 
 **Possible follow-ups:** use workload feedback to prioritize additional
 language/framework adapters, storage compaction, and integration improvements.
+The [development experiments](docs/development.md) describe three proposed
+directions and the evidence needed to judge them.
 Native filesystem mounting, OS isolation, encryption, and remote sync are
 separate, optional integrations rather than prerequisites for this SDK's release.
 Their scope should follow concrete user needs; AgentFS feature parity is not a

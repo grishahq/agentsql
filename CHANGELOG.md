@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Added an on-call race experiment using the published `0.3.0a1` SDK. It compares
+  untracked snapshot reads plus tool history with tracked branch reads, fresh
+  recomputation, and independent teams using real local worker processes.
+- Added checks of the application invariant after every accepted worker proposal,
+  rejected-proposal atomicity, and both acceptance orders, with a JSON report.
+- Recorded 400 controlled trials, 100 per case with balanced acceptance orders.
+  The snapshot-read baseline lost coverage in all 100 trials; the tracked,
+  recomputed, and independent-team cases had zero coverage violations.
+- Documented the difference between audit history and tracked dependencies,
+  plus proposed experiments for integration coverage, conflict cost, and
+  capacity and recovery. No runtime API or package version changed.
+
 ## 0.3.0a1 - 2026-10-25
 
 First public alpha release as AgentSQL. Earlier versions were local development builds.
