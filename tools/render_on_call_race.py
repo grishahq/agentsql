@@ -23,23 +23,23 @@ from typing import Any
 CASES = (
     (
         "snapshot_reads_with_tool_log",
-        "Snapshot reads + tool log",
-        "Snapshot observations are not tracked dependencies.",
+        "Read inputs and keep a log",
+        "Logged reads were not tracked for validation.",
     ),
     (
         "tracked_branch_reads",
-        "Tracked branch reads",
-        "Validate the versions read by each proposal.",
+        "Track inputs before accepting",
+        "Reject the second decision after its inputs change.",
     ),
     (
         "tracked_plus_recompute",
-        "Tracked reads + recompute",
-        "Refresh after recheck; run the leave policy again.",
+        "Track inputs, then decide again",
+        "Read the new schedule; deny the second time-off request.",
     ),
     (
         "independent_teams",
-        "Independent teams",
-        "Tracked reads, separate teams, different inputs.",
+        "Separate teams",
+        "Different tracked inputs; both decisions can be accepted.",
     ),
 )
 
@@ -139,17 +139,27 @@ def render(report_path: Path, output_path: Path, svg_path: Path | None = None) -
     rounds = report["rounds_per_case"]
     text(0.05, 0.945, "AgentSQL", 19, weight="bold")
     text(0.95, 0.945, "CONCURRENCY EXPERIMENT", 10.5, ha="right", color=muted)
-    text(0.05, 0.864, "Two leave approvals. Nobody on call.", 33, weight="bold")
+    text(0.05, 0.875, "Recheck agent results when their inputs change.", 31, weight="bold")
     text(
-        0.05, 0.805,
-        "Both workers read before either publishes. At least one person must stay on call.",
+        0.05, 0.821,
+        "AgentSQL checks tracked inputs before accepting an agent's work.",
         17, color=muted,
     )
-    text(0.05, 0.734, f"FOUR CASES  /  {rounds:,} ROUNDS EACH", 11, weight="bold")
-    text(0.63, 0.734, "ROUNDS WITH COVERAGE FAILURE", 11, weight="bold")
+    text(
+        0.05, 0.774,
+        "Test: two workers each approve time off for one person in a two-person support team.",
+        16.5, color=muted,
+    )
+    text(
+        0.05, 0.740,
+        "Both use the same old schedule. Accepting both leaves nobody to cover the shift.",
+        16.5, color=muted,
+    )
+    text(0.05, 0.698, f"FOUR CASES  /  {rounds:,} ROUNDS EACH", 11, weight="bold")
+    text(0.63, 0.698, "ROUNDS WITH NOBODY COVERING THE SHIFT", 10, weight="bold")
 
     summaries = report["summary"]
-    row_centers = (0.638, 0.49, 0.342, 0.194)
+    row_centers = (0.607, 0.464, 0.321, 0.178)
     for (case_id, title, subtitle), y in zip(CASES, row_centers):
         case = summaries[case_id]
         unsafe = case["coverage_violations"]

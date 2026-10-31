@@ -1,14 +1,22 @@
-# On-call race: audit history and tracked reads
+# Check changed inputs before accepting a worker's result
 
-Two workers can make individually plausible decisions, update different keys,
-and leave an invalid shared state. This lab models two responders, Alice and
-Bob, who each want to leave. The application rule is that at least one
-responder in each team must remain on call.
+AgentSQL checks whether a worker's tracked inputs changed before accepting its
+files and state changes. If another worker has changed a relevant input, the
+prepared result requires a recheck. Logging a tool call alone does not register
+that input as a dependency.
 
-Both workers prepare against the same accepted revision. Each sees another
-responder on call and proposes changing only its own status. These writes do
-not overlap. The comparison asks whether the observations used to make those
-decisions are validated when the proposals are accepted.
+This lab uses a two-person support team to make the problem concrete. Alice and
+Bob both request time off, but at least one person must remain available to
+cover the shift. Two workers read the same schedule before either saves a
+decision. One approves Alice's request because Bob is available. The other
+approves Bob's request because Alice is available.
+
+Each decision looks valid on its own. Accept both, and nobody is left to cover
+the shift. The workers change different keys, so checking only overlapping
+writes would not catch this problem. The comparison asks whether the inputs
+used to make each decision are validated when the worker's changes are
+accepted. In this lab, being available to cover the shift is called being
+"on call."
 
 The lab uses the published AgentSQL `0.3.0a1` SDK with no runtime API changes.
 The workers are real local Python processes; their decisions are simulated.
@@ -84,7 +92,7 @@ case. It checked all 400 seeded rosters and all 700 accepted decision revisions.
 The snapshot baseline's coverage failures are the expected negative-control
 outcome; they do not make its tool history disappear.
 
-![Controlled on-call race results: the snapshot-read baseline loses coverage in 100 of 100 trials; all three tracked cases have zero coverage violations.](../../docs/assets/on-call-race.png)
+![Two workers approve time off for the only two people available to cover a support shift. Without tracked reads, both requests are approved and nobody remains available in all 100 controlled trials. Tracked reads reject the stale decision for a recheck; the three tracked cases have no staffing-rule violations.](../../docs/assets/on-call-race.png)
 
 This run used AgentSQL `0.3.0a1`, Python 3.14.3, macOS 15.8.1, SQLite 3.53.4,
 and the multiprocessing `spawn` start method. The report includes the SDK base

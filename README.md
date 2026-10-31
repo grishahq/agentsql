@@ -57,13 +57,16 @@ The [platform guide](docs/platform.md) shows the expanded `fs`, `kv`, and `tools
 interfaces, MCP connection, command runner, and an explicit capability comparison
 with AgentFS. Run `python examples/platform_demo.py` after installation.
 
-## On-call race experiment
+## Experiment: two time-off requests, one support shift
 
-Two workers can update different keys and still break a shared rule. The
-[on-call race lab](experiments/on-call-race/README.md) models two responders who
-each try to leave while at least one must remain on call. It compares logged
-snapshot reads with tracked branch reads, fresh recomputation, and independent
-teams using the same local SDK.
+AgentSQL checks whether tracked inputs changed before accepting a worker's
+result. The [support-team race lab](experiments/on-call-race/README.md) shows why:
+two workers each approve time off for one of the only two people available to
+cover a shift. Each sees the other person available, but accepting both
+decisions leaves nobody to cover the shift.
+
+The lab compares logged snapshot reads with tracked branch reads, fresh
+recomputation, and independent teams using the same local SDK.
 
 ```sh
 python examples/on_call_race.py --rounds 10 --output on-call-results.json
